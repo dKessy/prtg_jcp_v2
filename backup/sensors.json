@@ -1,0 +1,20 @@
+[
+  { "group": "RDS 1","key": "rds", "id": 18666, "label": "Sessions RDS", "channels": true },
+  { "group": "RDS 1","key": "cpu", "id": 15312, "label": "Charge CPU serveur", "channels": false },
+  { "group": "RDS 1","key": "disque_c", "id": 15311, "label": "Disque C:", "channels": true },
+  { "group": "RDS 1","key": "ping_rds", "id": 15859, "label": "Ping serveur RDS 1", "channels": false, "wide": true },
+
+  { "group": "RDS 2","key": "rds", "id": 18667, "label": "Sessions RDS", "channels": true },
+  { "group": "RDS 2","key": "cpu", "id": 18562, "label": "Charge CPU serveur", "channels": false },
+  { "group": "RDS 2","key": "disque_c", "id": 18560, "label": "Disque C:", "channels": true },
+  { "group": "RDS 2","key": "ping_rds", "id": 15928, "label": "Ping serveur RDS 2", "channels": false, "wide": true },
+
+  { "group": "Routeurs MikroTik", "key": "ping_mk_vr", "id": 14991, "label": "Ping MK VR", "channels": false, "wide": true },
+  { "group": "Routeurs MikroTik", "key": "ping_mk_sr_holding", "id": 15158, "label": "Ping SR Holding MLS", "channels": false },
+  { "group": "Routeurs MikroTik", "key": "ping_mk_sr_koniambo", "id": 15162, "label": "Ping SR Koniambo Vavouto", "channels": false },
+  { "group": "Routeurs MikroTik", "key": "ping_mk_sr_goro", "id": 15909, "label": "Ping SR Goro", "channels": false },
+  { "group": "Routeurs MikroTik", "key": "ping_mk_sr_compta", "id": 15780, "label": "Ping SR Compta RH", "channels": false }
+ 
+ 
+  
+]

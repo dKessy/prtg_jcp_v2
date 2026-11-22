@@ -1,0 +1,46 @@
+:root {
+  --paper: #f4f1ea;
+  --ink: #141414;
+  --mute: #86827a;
+  --line: rgba(20, 20, 20, 0.1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --ok: #1f9d57;
+  --warn: #e0a100;
+  --down: #e5372b;
+  --idle: #9a968e;
+
+  --display: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--paper);
+  font: 15px/1.45 var(--sans);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; overflow: hidden; margin: 0; }
+body { background: var(--paper); }
+#root { height: 100%; }
+
+/* grain papier */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .32 0 0 0 0 .2 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+mark { background: #ffe066; color: inherit; border-radius: 2px; padding: 0 1px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
