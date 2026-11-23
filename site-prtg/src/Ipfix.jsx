@@ -260,7 +260,7 @@ function TopWindow({ top, period, big, onToggle }) {
   const [hover, setHover] = useState(null)
   const a = useMemo(() => analyzeToplist(top.rows), [top.rows])
   const [all, setAll] = useState(false)
-  const rows = a ? (all ? a.items : a.items.slice(0, 10)) : []
+  const rows = a?.items ? (all ? a.items : a.items.slice(0, 10)) : []
   return (
     <article className={`win ${big ? 'big' : ''}`}>
       <header className="win-bar">

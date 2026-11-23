@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Component, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { createEngine } from './engine.js'
 import Ipfix from './Ipfix.jsx'
@@ -6,6 +6,23 @@ import {
   DASHBOARD_URL, REFRESH_MS, TONE_LABEL, demoItems, getGauge, normalize, palette,
   placeholderItems, plainText, sensorId, tone, visibleChannels,
 } from './data.js'
+
+// Une erreur dans une section n'efface pas toute la page
+class SafeSection extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error) { console.error('[Section]', error) }
+  render() {
+    if (this.state.error) {
+      return (
+        <section className="ipfix"><div className="ip-alert" role="alert">
+          <strong>Cette section n’a pas pu s’afficher :</strong> {String(this.state.error.message || this.state.error)}
+        </div></section>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const DEMO = new URLSearchParams(location.search).has('demo')
 const THROW_TOASTS = ['Joli lancer.', 'Il revient toujours.', 'Gravité : en option.']
@@ -508,7 +525,7 @@ export default function App() {
       <a className="scroll-hint" href="#ipfix">Trafic réseau (IPFIX) <span aria-hidden="true">↓</span></a>
       </section>
 
-      <Ipfix demo={DEMO} />
+      <SafeSection><Ipfix demo={DEMO} /></SafeSection>
 
 
       {/* infobulle */}
