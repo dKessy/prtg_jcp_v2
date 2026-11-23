@@ -77,7 +77,11 @@ export function buildTraffic(data) {
   let ci = 0
   series.forEach((s) => { s.color = s.total ? '#141414' : COLORS[ci++ % COLORS.length] })
 
-  const last = (s) => { for (let i = s.values.length - 1; i >= 0; i--) if (s.values[i] != null) return s.values[i]; return null }
+  // dernier créneau réellement mesuré : on saute les points de fin où tout vaut 0 (créneau en cours)
+  let lastIdx = points.length - 1
+  const sumAt = (i) => speedKeys.reduce((a, k) => a + (points[i].values?.[k] || 0), 0)
+  while (lastIdx > 0 && sumAt(lastIdx) === 0) lastIdx--
+  const last = (s) => (lastIdx >= 0 ? s.values[lastIdx] ?? null : null)
   const stats = Object.fromEntries(series.map((s) => [s.name, {
     last: last(s), min: s.values.length ? Math.min(...s.values) : null, max: s.values.length ? Math.max(...s.values) : null,
   }]))
@@ -139,7 +143,9 @@ export function analyzeToplist(rows) {
       display: valueBase && r[valueBase] && r[valueBase] !== r[valueKey] ? r[valueBase] : null,
     }
   })
-  const total = items.reduce((a, b) => a + b.value, 0) || 1
+  const sum = items.reduce((a, b) => a + b.value, 0)
+  if (!sum) return { kind: 'raw', keys, rows }
+  const total = sum
   items.forEach((it) => { it.pct = (it.value / total) * 100 })
   return { kind: src && dst ? 'flows' : 'parts', items, total, hasPorts: !!(srcPort || dstPort), hasProto: !!(proto && src) }
 }

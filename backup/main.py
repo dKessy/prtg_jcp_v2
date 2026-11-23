@@ -240,6 +240,9 @@ def _ipfix_history(rng: str):
     })
     points = []
     for row in data.get("histdata", []):
+        # créneau sans aucune mesure (en cours ou trou de collecte) : on l'ignore
+        if _num(row.get("coverage_raw")) == 0:
+            continue
         values = {
             k: _num(v) for k, v in row.items()
             if k not in ("datetime", "datetime_raw", "coverage", "coverage_raw") and _num(v) is not None

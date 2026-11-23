@@ -277,7 +277,16 @@ function TopWindow({ top, period, big, onToggle }) {
       </header>
       {top.error && <p className="win-err">Classement indisponible : {top.error}</p>}
       {!top.error && !a && <p className="win-err">Aucune donnée pour le moment.</p>}
-      {a && (
+      {a?.kind === 'raw' && (
+        <div className="win-table raw">
+          <p className="win-err">Format de classement non reconnu : voici les données brutes renvoyées par PRTG.</p>
+          <table>
+            <thead><tr>{a.keys.map((k) => <th key={k}>{k}</th>)}</tr></thead>
+            <tbody>{a.rows.slice(0, 15).map((r, i) => <tr key={i}>{a.keys.map((k) => <td key={k}>{String(r[k] ?? '')}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      )}
+      {a && a.kind !== 'raw' && (
         <div className="win-body">
           <div className="win-chart">
             {a.kind === 'flows' ? <Chord items={a.items} hover={hover} setHover={setHover} /> : <Donut items={a.items} hover={hover} setHover={setHover} />}
