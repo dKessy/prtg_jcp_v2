@@ -30,15 +30,9 @@ IPFIX_TOPLISTS = {
 IPFIX_TOPNUMBER = os.getenv("IPFIX_TOPNUMBER", "live").strip() or "live"
 # Sans liste de colonnes, PRTG renvoie group,device,sensor,status (vides pour un classement).
 # On demande donc large : les colonnes inconnues reviennent vides et sont retirées.
-IPFIX_TOPLIST_COLUMNS = os.getenv("IPFIX_TOPLIST_COLUMNS", "").strip() or ",".join([
-    "position", "pos", "name", "channel", "protocol", "proto", "application", "service",
-    "source", "sourceip", "src", "srcip", "sender", "destination", "destinationip", "dst", "dstip", "receiver",
-    "sourceport", "srcport", "destinationport", "dstport", "ip", "ipaddress", "host", "port",
-    "value", "value_raw", "bytes", "bytes_raw", "volume", "volume_raw", "traffic", "traffic_raw",
-    "sum", "sum_raw", "size", "size_raw", "percent", "percent_raw", "lastvalue", "lastvalue_raw",
-    "count", "count_raw", "octets", "octets_raw", "total", "total_raw", "kbytes", "speed", "speed_raw",
-    "valuesum", "valuesum_raw", "sumvalue", "bytesum", "volumesum", "data", "flowbytes",
-])
+# L'interface PRTG demande columns=position,value_ : "value_" renvoie tous les champs du classement,
+# octets compris (avec "value", PRTG répond « Introuvable » pour les octets).
+IPFIX_TOPLIST_COLUMNS = os.getenv("IPFIX_TOPLIST_COLUMNS", "").strip() or "position,value_"
 IPFIX_CACHE_SECONDS = 60
 # plage -> (durée, moyenne en secondes)
 IPFIX_RANGES = {"10h": (timedelta(hours=10), 300), "2j": (timedelta(days=2), 3600), "30j": (timedelta(days=30), 21600)}
@@ -332,6 +326,16 @@ def ipfix(range: str = "10h"):
     if not result["errors"] and all(not t.get("error") for t in toplists):
         _ipfix_cache[range] = (time.time(), result)
     return result
+
+
+@app.get("/api/prtg/ipfix/rawjson/{subid}")
+def ipfix_rawjson(subid: int):
+    """Diagnostic : toplist.json, la source des graphiques de classement dans l'interface PRTG."""
+    r = prtg_raw("/toplist.json", {"id": IPFIX_SENSOR_ID, "subid": subid, "topnumber": IPFIX_TOPNUMBER})
+    try:
+        return r.json()
+    except ValueError:
+        return {"text": r.content.decode("utf-8", "replace")[:4000]}
 
 
 @app.get("/api/prtg/ipfix/raw/{subid}")
