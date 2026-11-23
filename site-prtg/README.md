@@ -10,6 +10,8 @@ Chaque capteur listé dans `../backup/sensors.json` devient un module 3D qui tou
 - **Épingler** un capteur pour le retrouver dans « Épinglés » (mémorisé dans le navigateur) ;
 - clic sur le petit module du titre : mélange l'anneau.
 
+En bas de page : la section **Trafic réseau (IPFIX)** (jauges, graphique 10 h / 2 j / 30 j, fenêtres des trois classements, tableau des canaux), lue sur `GET /api/prtg/ipfix`.
+
 Les données viennent du backend (`../backup`) via `GET /api/prtg/dashboard`, rafraîchies toutes les 30 s.
 
 ## Lancer
@@ -31,4 +33,4 @@ npm run dev
 Puis ouvrir http://localhost:5173
 
 - **Sans PRTG** : http://localhost:5173/?demo affiche des valeurs fictives (marquées « démo »).
-- **Autre adresse de backend** : définir `VITE_DASHBOARD_URL` (ex. dans `.env.local`).
+- **Autre adresse de backend** : définir `VITE_DASHBOARD_URL` (et au besoin `VITE_IPFIX_URL`) dans `.env.local`.

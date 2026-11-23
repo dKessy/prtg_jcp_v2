@@ -1,6 +1,8 @@
 import json
 import os
 import time
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -18,6 +20,17 @@ PRTG_URL = os.getenv("PRTG_URL", "").rstrip("/")
 PRTG_TOKEN = os.getenv("PRTG_TOKEN", "").strip()
 SENSORS_FILE = Path(__file__).parent / "sensors.json"
 CACHE_SECONDS = 20
+IPFIX_SENSOR_ID = int(os.getenv("IPFIX_SENSOR_ID", "18676") or 0)
+# ID des classements (subid dans l'URL toplist.htm) : 1 adresses IP, 2 connexions, 3 protocoles
+IPFIX_TOPLISTS = {
+    1: "Adresses IP les plus actives",
+    2: "Connexions les plus utilisées",
+    3: "Protocoles les plus utilisés",
+}
+IPFIX_TOPNUMBER = os.getenv("IPFIX_TOPNUMBER", "live").strip() or "live"
+IPFIX_CACHE_SECONDS = 60
+# plage -> (durée, moyenne en secondes)
+IPFIX_RANGES = {"10h": (timedelta(hours=10), 300), "2j": (timedelta(days=2), 3600), "30j": (timedelta(days=30), 21600)}
 
 app = FastAPI()
 app.add_middleware(
@@ -30,7 +43,7 @@ app.add_middleware(
 _cache = {"ts": 0.0, "data": None}
 
 
-def prtg_get(path: str, params: dict):
+def prtg_raw(path: str, params: dict):
     """Appelle l'API PRTG avec le token. Le token ne sort jamais du backend."""
     if not PRTG_URL or not PRTG_TOKEN:
         raise HTTPException(status_code=500, detail="PRTG_URL ou PRTG_TOKEN manquant dans .env")
@@ -46,7 +59,11 @@ def prtg_get(path: str, params: dict):
     print(f"[PRTG] {path} -> HTTP {r.status_code}")
     if not r.ok:
         raise HTTPException(status_code=502, detail=f"PRTG a refusé l'accès (HTTP {r.status_code})")
-    return r.json()
+    return r
+
+
+def prtg_get(path: str, params: dict):
+    return prtg_raw(path, params).json()
 
 
 def load_sensors():
@@ -157,3 +174,135 @@ def dashboard():
 
     _cache.update(ts=time.time(), data=resultat)
     return resultat
+
+# ---------------------------------------------------------------- IPFIX
+
+_ipfix_cache = {}
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _part(fn):
+    """Exécute un morceau de la réponse IPFIX : une erreur n'empêche pas le reste de s'afficher."""
+    try:
+        return fn(), None
+    except HTTPException as e:
+        return None, e.detail
+    except Exception as e:  # format inattendu
+        print(f"[IPFIX] {type(e).__name__}: {e}")
+        return None, f"réponse PRTG inattendue ({type(e).__name__})"
+
+
+def _ipfix_sensor():
+    data = prtg_get("/api/table.json", {
+        "content": "sensors",
+        "output": "json",
+        "filter_objid": IPFIX_SENSOR_ID,
+        "columns": "objid,device,sensor,status,status_raw,lastvalue,message,lastcheck,lastup,interval,type",
+    })
+    rows = data.get("sensors", [])
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"capteur {IPFIX_SENSOR_ID} introuvable")
+    s = rows[0]
+    s["status_raw"] = int(s.get("status_raw") or 0)
+    return s
+
+
+def _ipfix_channels():
+    data = prtg_get("/api/table.json", {
+        "content": "channels",
+        "output": "json",
+        "id": IPFIX_SENSOR_ID,
+        "columns": "objid,name,lastvalue,lastvalue_raw",
+    })
+    return [
+        {"id": c.get("objid"), "name": c.get("name"), "value": c.get("lastvalue"), "raw": _num(c.get("lastvalue_raw"))}
+        for c in data.get("channels", [])
+        if c.get("name") not in ("Downtime", "Temps mort")
+    ]
+
+
+def _ipfix_history(rng: str):
+    span, avg = IPFIX_RANGES[rng]
+    end = datetime.now()
+    fmt = "%Y-%m-%d-%H-%M-%S"
+    data = prtg_get("/api/historicdata.json", {
+        "id": IPFIX_SENSOR_ID,
+        "avg": avg,
+        "sdate": (end - span).strftime(fmt),
+        "edate": end.strftime(fmt),
+        "usecaption": 1,
+    })
+    points = []
+    for row in data.get("histdata", []):
+        values = {
+            k: _num(v) for k, v in row.items()
+            if k not in ("datetime", "datetime_raw", "coverage", "coverage_raw") and _num(v) is not None
+        }
+        points.append({"t": row.get("datetime"), "t_raw": _num(row.get("datetime_raw")), "values": values})
+    return {"range": rng, "avg": avg, "points": points}
+
+
+def _ipfix_toplist(subid: int):
+    """Les classements ne sont disponibles qu'en XML : on renvoie chaque <item> sous forme de dictionnaire."""
+    r = prtg_raw("/api/table.xml", {
+        "content": "topdata",
+        "id": IPFIX_SENSOR_ID,
+        "subid": subid,
+        "topnumber": IPFIX_TOPNUMBER,
+        "count": 50,
+    })
+    root = ET.fromstring(r.content)
+    rows = []
+    for item in root.iter("item"):
+        row = {}
+        for child in item:
+            row[child.tag] = (child.text or "").strip()
+        if row:
+            rows.append(row)
+    return {"subid": subid, "title": IPFIX_TOPLISTS.get(subid, f"Classement {subid}"), "rows": rows}
+
+
+@app.get("/api/prtg/ipfix")
+def ipfix(range: str = "10h"):
+    """Capteur IPFIX : infos, canaux, historique et les trois classements (Top lists)."""
+    if not IPFIX_SENSOR_ID:
+        raise HTTPException(status_code=500, detail="IPFIX_SENSOR_ID manquant dans .env")
+    if range not in IPFIX_RANGES:
+        raise HTTPException(status_code=400, detail=f"range doit valoir {', '.join(IPFIX_RANGES)}")
+
+    cached = _ipfix_cache.get(range)
+    if cached and time.time() - cached[0] < IPFIX_CACHE_SECONDS:
+        return cached[1]
+
+    errors = {}
+    sensor, errors["sensor"] = _part(_ipfix_sensor)
+    channels, errors["channels"] = _part(_ipfix_channels)
+    history, errors["history"] = _part(lambda: _ipfix_history(range))
+    toplists = []
+    for subid in IPFIX_TOPLISTS:
+        top, err = _part(lambda subid=subid: _ipfix_toplist(subid))
+        toplists.append(top or {"subid": subid, "title": IPFIX_TOPLISTS[subid], "rows": [], "error": err})
+
+    result = {
+        "id": IPFIX_SENSOR_ID,
+        "sensor": sensor,
+        "channels": channels or [],
+        "history": history or {"range": range, "points": []},
+        "toplists": toplists,
+        "errors": {k: v for k, v in errors.items() if v},
+    }
+    if not result["errors"] and all(not t.get("error") for t in toplists):
+        _ipfix_cache[range] = (time.time(), result)
+    return result
+
+
+@app.get("/api/prtg/ipfix/raw/{subid}")
+def ipfix_raw(subid: int):
+    """Diagnostic : contenu brut d'un classement, pour voir les noms de colonnes renvoyés par PRTG."""
+    return _ipfix_toplist(subid)

@@ -1,8 +1,25 @@
-.app { position: relative; height: 100%; overflow: hidden; }
+.app { position: relative; }
+.hero-wrap { position: relative; height: 100vh; height: 100svh; overflow: hidden; }
+.scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  z-index: 15;
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mute);
+  text-decoration: none;
+  transition: color 0.2s, opacity 0.3s;
+}
+.scroll-hint:hover { color: var(--ink); }
+.scroll-hint span { display: inline-block; animation: nudge 1.8s var(--out) infinite; }
+@keyframes nudge { 50% { transform: translateY(3px); } }
+.is-focus .scroll-hint { opacity: 0; pointer-events: none; }
 
 /* ================= scène 3D ================= */
 #stage {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 1;
   perspective: 1900px;
@@ -240,7 +257,7 @@
 
 /* ================= barre du haut ================= */
 .topbar {
-  position: fixed;
+  position: absolute;
   inset: 0 0 auto;
   z-index: 20;
   display: grid;
@@ -402,7 +419,7 @@
 
 /* ================= titre ================= */
 .hero {
-  position: fixed;
+  position: absolute;
   left: 50%;
   top: 50%;
   z-index: 10;
@@ -539,7 +556,7 @@
 
 /* ================= coins ================= */
 .hints {
-  position: fixed;
+  position: absolute;
   left: 24px;
   bottom: 22px;
   z-index: 15;
@@ -549,7 +566,7 @@
   pointer-events: none;
 }
 .switch {
-  position: fixed;
+  position: absolute;
   right: 24px;
   bottom: 18px;
   z-index: 15;
@@ -577,7 +594,7 @@
 .is-focus .switch, .is-focus .hints, .is-focus .counter { opacity: 0; pointer-events: none; }
 
 .alert {
-  position: fixed;
+  position: absolute;
   left: 50%;
   bottom: 72px;
   z-index: 25;
@@ -753,6 +770,7 @@
   .sub { font-size: 14px; margin-top: 12px; }
   .chip { height: 30px; padding: 0 11px; font-size: 12px; }
   .switch { right: auto; left: 50%; transform: translateX(-50%); }
+  .scroll-hint { bottom: 64px; }
   .alert { bottom: 66px; }
 
   .close { top: auto; bottom: 20px; left: 16px; }

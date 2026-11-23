@@ -179,6 +179,7 @@ export function createEngine(stage, opts) {
     const dt = Math.min(0.033, last ? now - last : 0.016)
     last = now
     const st = opts.getState()
+    if (st.paused) return // titre hors écran : on ne calcule rien
 
     // vitesse du pointeur (px / image)
     pointer.vx = pointer.vx * 0.6 + (pointer.x - pointer.px) * 0.4

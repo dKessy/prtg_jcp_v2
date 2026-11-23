@@ -25,9 +25,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html, body { height: 100%; overflow: hidden; margin: 0; }
-body { background: var(--paper); }
-#root { height: 100%; }
+html, body { margin: 0; }
+html { overflow-x: hidden; scroll-behavior: smooth; }
+body { background: var(--paper); overflow-x: hidden; }
+html.lock, html.lock body { overflow: hidden; }
 
 /* grain papier */
 body::before {

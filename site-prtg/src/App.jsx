@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { createEngine } from './engine.js'
+import Ipfix from './Ipfix.jsx'
 import {
   DASHBOARD_URL, REFRESH_MS, TONE_LABEL, demoItems, getGauge, normalize, palette,
   placeholderItems, plainText, sensorId, tone, visibleChannels,
@@ -162,6 +163,8 @@ export default function App() {
   const stateRef = useRef({ active: new Set(), focus: null, focusAt: 0, readOpen: true, layout: 'orbit', hover: null })
   const focusAtRef = useRef(0)
   const toastTimer = useRef(0)
+  const heroRef = useRef(null)
+  const heroVisible = useRef(true)
 
   /* ----- données ----- */
   const load = useCallback(async () => {
@@ -216,7 +219,7 @@ export default function App() {
   const order = useMemo(() => items.map(sensorId).filter((id) => active.has(id)), [items, active])
 
   useLayoutEffect(() => {
-    stateRef.current = { active, focus, focusAt: focusAtRef.current, readOpen, layout, hover }
+    stateRef.current = { active, focus, focusAt: focusAtRef.current, readOpen, layout, hover, paused: !heroVisible.current }
   })
 
   /* ----- moteur ----- */
@@ -244,6 +247,7 @@ export default function App() {
   }, [])
 
   const openFocus = useCallback((id) => {
+    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: 'smooth' })
     focusAtRef.current = performance.now() / 1000
     setFocus(id)
     setReadOpen(true)
@@ -277,7 +281,7 @@ export default function App() {
       if (r.click) openFocus(r.click)
       if (r.thrown) say(THROW_TOASTS[Math.floor(Math.random() * THROW_TOASTS.length)])
     }
-    const wheel = (e) => { if (!stateRef.current.focus && stateRef.current.layout === 'orbit') engineRef.current?.wheel(e.deltaY) }
+    const wheel = (e) => { if (!stateRef.current.focus && !stateRef.current.paused && stateRef.current.layout === 'orbit') engineRef.current?.wheel(e.deltaY) }
     const leave = () => engineRef.current?.onLeave()
     addEventListener('pointermove', move, { passive: true })
     addEventListener('pointerup', up)
@@ -317,6 +321,19 @@ export default function App() {
     addEventListener('pointerdown', close)
     return () => removeEventListener('pointerdown', close)
   }, [shelfOpen])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('lock', !!focus)
+  }, [focus])
+
+  useEffect(() => {
+    const io = new IntersectionObserver(([e]) => {
+      heroVisible.current = e.isIntersecting
+      if (stateRef.current) stateRef.current.paused = !e.isIntersecting
+    })
+    io.observe(heroRef.current)
+    return () => io.disconnect()
+  }, [])
 
   useEffect(() => {
     try { localStorage.setItem(PIN_KEY, JSON.stringify(pinned)) } catch { /* stockage indisponible */ }
@@ -363,6 +380,7 @@ export default function App() {
 
   return (
     <div className={`app ${layout === 'grid' ? 'is-grid' : ''} ${focus ? 'is-focus' : ''}`}>
+      <section className="hero-wrap" ref={heroRef}>
       {/* scène 3D */}
       <div
         id="stage"
@@ -481,13 +499,17 @@ export default function App() {
         <button type="button" className={layout === 'orbit' ? 'on' : ''} onClick={() => layout !== 'orbit' && toggleLayout()}>Orbite</button>
         <button type="button" className={layout === 'grid' ? 'on' : ''} onClick={() => layout !== 'grid' && toggleLayout()}>Grille</button>
       </div>
-
       {error && !focus && (
         <div className="alert" role="alert">
           <strong>Impossible de lire les capteurs :</strong> {error}. Lancez le backend sur le port 8000
           (token valide, sensors.json correct) — ou ouvrez la page avec <a href="?demo">?demo</a>.
         </div>
       )}
+      <a className="scroll-hint" href="#ipfix">Trafic réseau (IPFIX) <span aria-hidden="true">↓</span></a>
+      </section>
+
+      <Ipfix demo={DEMO} />
+
 
       {/* infobulle */}
       <div ref={tipRef} className={`tip ${hs ? 'show' : ''}`} aria-hidden="true">
