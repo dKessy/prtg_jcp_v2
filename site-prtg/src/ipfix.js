@@ -109,7 +109,8 @@ const SKIP_KEY = /^(pos|position|rank|percent|pourcent|%|id|objid|sort)$/i
 export function analyzeToplist(rows) {
   if (!rows?.length) return null
   const keys = Object.keys(rows[0])
-  const isNum = (k) => rows.every((r) => r[k] === '' || r[k] == null || !Number.isNaN(parseFloat(String(r[k]).replace(',', '.'))))
+  const filled = (k) => rows.some((r) => r[k] !== '' && r[k] != null)
+  const isNum = (k) => filled(k) && rows.every((r) => r[k] === '' || r[k] == null || !Number.isNaN(parseFloat(String(r[k]).replace(/\s/g, '').replace(',', '.'))))
   const rawOf = (k) => (keys.includes(`${k}_raw`) ? `${k}_raw` : k)
 
   let valueKey = keys.find((k) => /_raw$/.test(k) && VALUE_KEY.test(k) && isNum(k))

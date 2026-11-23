@@ -28,6 +28,16 @@ IPFIX_TOPLISTS = {
     3: "Protocoles les plus utilisés",
 }
 IPFIX_TOPNUMBER = os.getenv("IPFIX_TOPNUMBER", "live").strip() or "live"
+# Sans liste de colonnes, PRTG renvoie group,device,sensor,status (vides pour un classement).
+# On demande donc large : les colonnes inconnues reviennent vides et sont retirées.
+IPFIX_TOPLIST_COLUMNS = os.getenv("IPFIX_TOPLIST_COLUMNS", "").strip() or ",".join([
+    "position", "pos", "name", "channel", "protocol", "proto", "application", "service",
+    "source", "sourceip", "src", "srcip", "sender", "destination", "destinationip", "dst", "dstip", "receiver",
+    "sourceport", "srcport", "destinationport", "dstport", "ip", "ipaddress", "host", "port",
+    "value", "value_raw", "bytes", "bytes_raw", "volume", "volume_raw", "traffic", "traffic_raw",
+    "sum", "sum_raw", "size", "size_raw", "percent", "percent_raw", "lastvalue", "lastvalue_raw",
+    "count", "count_raw",
+])
 IPFIX_CACHE_SECONDS = 60
 # plage -> (durée, moyenne en secondes)
 IPFIX_RANGES = {"10h": (timedelta(hours=10), 300), "2j": (timedelta(days=2), 3600), "30j": (timedelta(days=30), 21600)}
@@ -251,7 +261,7 @@ def _ipfix_history(rng: str):
     return {"range": rng, "avg": avg, "points": points}
 
 
-def _ipfix_toplist(subid: int):
+def _ipfix_toplist(subid: int, columns: str = "", with_xml: bool = False):
     """Les classements ne sont disponibles qu'en XML : on renvoie chaque <item> sous forme de dictionnaire."""
     r = prtg_raw("/api/table.xml", {
         "content": "topdata",
@@ -259,16 +269,21 @@ def _ipfix_toplist(subid: int):
         "subid": subid,
         "topnumber": IPFIX_TOPNUMBER,
         "count": 50,
+        "columns": columns or IPFIX_TOPLIST_COLUMNS,
     })
     root = ET.fromstring(r.content)
     rows = []
     for item in root.iter("item"):
-        row = {}
-        for child in item:
-            row[child.tag] = (child.text or "").strip()
+        row = {child.tag: (child.text or "").strip() for child in item}
         if row:
             rows.append(row)
-    return {"subid": subid, "title": IPFIX_TOPLISTS.get(subid, f"Classement {subid}"), "rows": rows}
+    # on retire les colonnes vides partout (colonnes inconnues de PRTG)
+    filled = [k for k in (rows[0].keys() if rows else []) if any(r.get(k) for r in rows)]
+    rows = [{k: r.get(k, "") for k in filled} for r in rows]
+    out = {"subid": subid, "title": IPFIX_TOPLISTS.get(subid, f"Classement {subid}"), "rows": rows}
+    if with_xml:
+        out["xml"] = r.content.decode("utf-8", "replace")[:4000]
+    return out
 
 
 @app.get("/api/prtg/ipfix")
@@ -306,6 +321,7 @@ def ipfix(range: str = "10h"):
 
 
 @app.get("/api/prtg/ipfix/raw/{subid}")
-def ipfix_raw(subid: int):
-    """Diagnostic : contenu brut d'un classement, pour voir les noms de colonnes renvoyés par PRTG."""
-    return _ipfix_toplist(subid)
+def ipfix_raw(subid: int, columns: str = ""):
+    """Diagnostic : contenu brut d'un classement (colonnes remplies + début du XML).
+    Ex. : /api/prtg/ipfix/raw/3?columns=channel,bytes,bytes_raw pour tester des noms de colonnes."""
+    return _ipfix_toplist(subid, columns, with_xml=True)
