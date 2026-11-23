@@ -3,7 +3,7 @@ import './ipfix.css'
 import { tone } from './data.js'
 import {
   COLORS, IPFIX_REFRESH_MS, IPFIX_URL, OTHER_COLOR, RANGES, analyzeToplist, buildTraffic,
-  demoIpfix, formatBytes, formatKbit, pct, shortHost,
+  demoIpfix, formatBytes, formatKbit, pct, protoName, shortHost,
 } from './ipfix.js'
 
 const TAU = Math.PI * 2
@@ -256,9 +256,9 @@ function History({ traffic, range }) {
 }
 
 /* ---------------- fenêtre de classement ---------------- */
-function TopWindow({ top, period, big, onToggle }) {
+function TopWindow({ top, period, big, onToggle, volumes }) {
   const [hover, setHover] = useState(null)
-  const a = useMemo(() => analyzeToplist(top.rows), [top.rows])
+  const a = useMemo(() => analyzeToplist(top.rows, volumes), [top.rows, volumes])
   const [all, setAll] = useState(false)
   const rows = a?.items ? (all ? a.items : a.items.slice(0, 10)) : []
   return (
@@ -292,13 +292,19 @@ function TopWindow({ top, period, big, onToggle }) {
             {a.kind === 'flows' ? <Chord items={a.items} hover={hover} setHover={setHover} /> : <Donut items={a.items} hover={hover} setHover={setHover} />}
           </div>
           <div className="win-table">
+            {a.basis !== 'bytes' && (
+              <p className="win-note">
+                {a.basis === 'count' && 'PRTG ne transmet pas les octets de ce classement via l’API : l’épaisseur des liens indique le nombre de connexions, dans l’ordre du classement PRTG.'}
+                {a.basis === 'channel-volume' && 'Octets : volume de chaque canal sur les 15 dernières minutes (historique du capteur), PRTG ne les transmettant pas pour ce classement.'}
+                {a.basis === 'none' && 'PRTG ne transmet pas les octets de ce classement via l’API : ordre du classement PRTG.'}
+              </p>
+            )}
             <table>
               <thead>
                 <tr>
                   <th>Pos.</th>
                   {a.kind === 'flows' ? (<><th>Expéditeur</th>{a.hasPorts && big && <th>Port</th>}<th>Destinataire</th>{a.hasPorts && big && <th>Port</th>}{a.hasProto && big && <th>Proto.</th>}</>) : <th>Canal</th>}
-                  <th className="num">Octets</th>
-                  <th className="num">%</th>
+                  {a.basis !== 'count' && a.basis !== 'none' && <><th className="num">Octets</th><th className="num">%</th></>}
                 </tr>
               </thead>
               <tbody>
@@ -313,13 +319,12 @@ function TopWindow({ top, period, big, onToggle }) {
                           {a.hasPorts && big && <td>{it.srcPort}</td>}
                           <td title={it.dst}>{it.other ? '' : shortHost(it.dst, big ? 34 : 26)}</td>
                           {a.hasPorts && big && <td>{it.dstPort}</td>}
-                          {a.hasProto && big && <td>{it.proto}</td>}
+                          {a.hasProto && big && <td>{protoName(it.proto)}</td>}
                         </>
                       ) : (
                         <td><i className="sw" style={{ background: it.other ? OTHER_COLOR : COLORS[a.items.filter((x) => x.value > 0).indexOf(it) % COLORS.length] }} />{it.other ? '' : it.label}</td>
                       )}
-                      <td className="num">{it.display || formatBytes(it.value)}</td>
-                      <td className="num">{pct(it.pct)}</td>
+                      {a.basis !== 'count' && a.basis !== 'none' && (<><td className="num">{it.display || (it.other && a.basis !== 'bytes' ? '–' : formatBytes(it.value))}</td><td className="num">{it.value ? pct(it.pct) : '–'}</td></>)}
                     </tr>
                   )
                 })}
@@ -443,7 +448,7 @@ export default function Ipfix({ demo }) {
       {/* classements */}
       <div className="wins">
         {(data?.toplists || []).map((top) => (
-          <TopWindow key={top.subid} top={top} period={period} big={big === top.subid} onToggle={() => setBig(big === top.subid ? null : top.subid)} />
+          <TopWindow key={top.subid} top={top} period={period} volumes={traffic.volumes} big={big === top.subid} onToggle={() => setBig(big === top.subid ? null : top.subid)} />
         ))}
       </div>
 

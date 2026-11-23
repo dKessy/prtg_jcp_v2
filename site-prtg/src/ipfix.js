@@ -94,19 +94,26 @@ export function buildTraffic(data) {
     return { name, id: c.id, value: c.value, color: s?.color || OTHER_COLOR, total: isTotal(name), ...stats[name] }
   }).sort((a, b) => (a.total - b.total) || a.name.localeCompare(b.name, 'fr'))
 
-  return { times: points.map((p) => p.t), series, channels }
+  // volume (octets) par canal sur les ~15 dernières minutes mesurées, pour le repli du classement des protocoles
+  const volKeys = [...keys].filter((k) => VOLUME.test(k))
+  const avg = data?.history?.avg || 300
+  const nLast = Math.max(1, Math.round(900 / avg))
+  const recent = points.slice(Math.max(0, lastIdx + 1 - nLast), lastIdx + 1)
+  const volumes = Object.fromEntries(volKeys.map((k) => [k.replace(SUFFIX, ''), recent.reduce((a, p) => a + (p.values?.[k] || 0), 0)]))
+
+  return { times: points.map((p) => p.t), series, channels, volumes }
 }
 
 /* ---------------- classements (Top lists) ---------------- */
 const VALUE_KEY = /(byte|octet|volume|traffic|trafic|size|taille)/i
 const SRC_KEY = /(src|source|sender|exp(e|é)diteur|from)/i
-const DST_KEY = /(dst|dest|destination|receiver|to$)/i
+const DST_KEY = /(dst|dest|destination|destinataire|receiver|to$)/i
 const PORT_KEY = /port/i
 const PROTO_KEY = /(proto|channel|canal|service|application|name|nom)/i
-const SKIP_KEY = /^(pos|position|rank|percent|pourcent|%|id|objid|sort)$/i
+const SKIP_KEY = /^(pos|position|rank|percent|pourcent|%|id|objid|sort|name|channel|source|host|sum|size|lastvalue)$/i
 
 /** Devine la colonne « volume » et les colonnes texte d'un classement, quels que soient les noms PRTG. */
-export function analyzeToplist(rows) {
+export function analyzeToplist(rows, volumes) {
   if (!rows?.length) return null
   const keys = Object.keys(rows[0])
   const filled = (k) => rows.some((r) => r[k] !== '' && r[k] != null)
@@ -115,8 +122,6 @@ export function analyzeToplist(rows) {
 
   let valueKey = keys.find((k) => /_raw$/.test(k) && VALUE_KEY.test(k) && isNum(k))
     || keys.find((k) => VALUE_KEY.test(k) && isNum(rawOf(k)) && rawOf(k))
-    || keys.filter((k) => /_raw$/.test(k) && isNum(k)).pop()
-    || keys.filter((k) => isNum(k) && !SKIP_KEY.test(k)).pop()
   if (valueKey && !/_raw$/.test(valueKey) && keys.includes(`${valueKey}_raw`)) valueKey = `${valueKey}_raw`
   const valueBase = valueKey?.replace(/_raw$/, '')
 
@@ -129,9 +134,9 @@ export function analyzeToplist(rows) {
   const proto = textKeys.find((k) => PROTO_KEY.test(k) && k !== src && k !== dst)
 
   const items = rows.map((r) => {
-    const v = parseFloat(String(r[valueKey] ?? '').replace(/\s/g, '').replace(',', '.'))
+    const v = valueKey ? parseFloat(String(r[valueKey] ?? '').replace(/\s/g, '').replace(',', '.')) : NaN
     const label = (src && dst) ? `${r[src]} → ${r[dst]}` : (proto ? r[proto] : textKeys.map((k) => r[k]).filter(Boolean).join(' · '))
-    const other = !label || /^(autre|other|others|autres)$/i.test(String(label).trim()) || (src && !r[src] && !r[dst])
+    const other = !label || /^(autre|other|others|autres)$/i.test(String(label).trim()) || /^(autre|other)/i.test(String(r.position || '')) || (src && !r[src] && !r[dst])
     return {
       label: other ? 'Autre' : label,
       other,
@@ -144,14 +149,30 @@ export function analyzeToplist(rows) {
       display: valueBase && r[valueBase] && r[valueBase] !== r[valueKey] ? r[valueBase] : null,
     }
   })
-  const sum = items.reduce((a, b) => a + b.value, 0)
-  if (!sum) return { kind: 'raw', keys, rows }
-  const total = sum
-  items.forEach((it) => { it.pct = (it.value / total) * 100 })
-  return { kind: src && dst ? 'flows' : 'parts', items, total, hasPorts: !!(srcPort || dstPort), hasProto: !!(proto && src) }
+  const kind = src && dst ? 'flows' : proto ? 'parts' : null
+  if (!kind) return { kind: 'raw', keys, rows }
+  let basis = 'bytes'
+  if (!valueKey) {
+    // PRTG ne fournit pas les octets via l'API : repli
+    if (kind === 'parts' && volumes) {
+      basis = 'channel-volume'
+      items.forEach((it) => { it.value = it.other ? 0 : (volumes[it.label] || 0) })
+      const known = items.reduce((a, b) => a + b.value, 0)
+      if (!known) basis = 'none'
+    } else {
+      basis = kind === 'flows' ? 'count' : 'none'
+      items.forEach((it) => { it.value = it.other ? 0 : 1 })
+    }
+  }
+  const total = items.reduce((a, b) => a + b.value, 0)
+  items.forEach((it) => { it.pct = total ? (it.value / total) * 100 : 0 })
+  return { kind, items, total, basis, hasPorts: !!(srcPort || dstPort), hasProto: !!(proto && src) }
 }
 
 // "JCP-BROKER (172.16.86.11)" -> "JCP-BROKE…16.86.11)" comme dans PRTG
+const IP_PROTO = { 1: 'ICMP', 6: 'TCP', 17: 'UDP', 47: 'GRE', 50: 'ESP', 51: 'AH', 58: 'ICMPv6', 132: 'SCTP' }
+export const protoName = (p) => (p && IP_PROTO[+p] ? `${IP_PROTO[+p]} (${p})` : p || '')
+
 export function shortHost(s, max = 20) {
   s = String(s || '')
   if (s.length <= max) return s

@@ -36,7 +36,8 @@ IPFIX_TOPLIST_COLUMNS = os.getenv("IPFIX_TOPLIST_COLUMNS", "").strip() or ",".jo
     "sourceport", "srcport", "destinationport", "dstport", "ip", "ipaddress", "host", "port",
     "value", "value_raw", "bytes", "bytes_raw", "volume", "volume_raw", "traffic", "traffic_raw",
     "sum", "sum_raw", "size", "size_raw", "percent", "percent_raw", "lastvalue", "lastvalue_raw",
-    "count", "count_raw",
+    "count", "count_raw", "octets", "octets_raw", "total", "total_raw", "kbytes", "speed", "speed_raw",
+    "valuesum", "valuesum_raw", "sumvalue", "bytesum", "volumesum", "data", "flowbytes",
 ])
 IPFIX_CACHE_SECONDS = 60
 # plage -> (durée, moyenne en secondes)
@@ -274,7 +275,20 @@ def _ipfix_toplist(subid: int, columns: str = "", with_xml: bool = False):
     root = ET.fromstring(r.content)
     rows = []
     for item in root.iter("item"):
-        row = {child.tag: (child.text or "").strip() for child in item}
+        row = {}
+        for child in item:
+            text = (child.text or "").strip()
+            # PRTG répète <value channel="IP de l'expéditeur" channelid="5">…</value> : une colonne par attribut channel
+            ch = child.get("channel")
+            if ch is not None:
+                if ch == "Introuvable" or ch.lower() == "not found":
+                    continue
+                key = f"{ch}_raw" if child.tag.endswith("_raw") else ch
+                if key.endswith("_raw") and text and not text.isdigit():
+                    text = ""  # valeur brute invalide (ligne « Autre »)
+                row[key] = text
+            elif text or child.tag not in row:
+                row[child.tag] = text
         if row:
             rows.append(row)
     # on retire les colonnes vides partout (colonnes inconnues de PRTG)

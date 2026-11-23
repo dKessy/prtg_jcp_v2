@@ -103,6 +103,7 @@
 }
 .win-btn svg { width: 14px; height: 14px; }
 .win-btn:hover { transform: scale(1.08); }
+.win-note { margin: 0 0 6px; padding: 8px 10px; border-radius: 10px; background: rgba(224, 161, 0, 0.1); font-size: 12px; color: #6b5a2a; }
 .win-err { margin: 0; padding: 22px 18px; font-size: 14px; color: var(--mute); }
 
 /* jauges */
